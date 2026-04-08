@@ -1,101 +1,71 @@
 # Terrain Diffusion Fabric Mod
 
-This is a Minecraft Fabric mod for integrating [Terrain Diffusion](https://github.com/xandergos/terrain-diffusion). 
-The mod works purely server-side so can be used on servers if desired. The mod requires the Terrain Diffusion Minecraft API to be running in the background. See instructions below.
+This is a Minecraft Fabric mod integrating [Terrain Diffusion](https://github.com/xandergos/terrain-diffusion).
+The mod works purely server-side and can be used on multiplayer servers. In v2, the mod is **self-contained**: it runs ML inference locally via ONNX and does not require any external Python process.
 
-This is a research preview. I cannot guarantee continued maintanence of the mod, but I am happy to support mod developers.
+This is a research preview. I cannot guarantee continued maintenance of the mod, but I am happy to support mod developers.
 
-## Requirements:
+## Requirements
+
 - Minecraft with [Fabric](https://fabricmc.net/) and the [Fabric API Mod](https://modrinth.com/mod/fabric-api) installed.
-- Python and Git
+- An NVIDIA GPU with CUDA is strongly recommended. CPU inference is supported but slow (see [Configuration)](#configuration).
 
 ## Installation
 
-1. Install the mod
+1. Download the mod jar from the [releases](https://github.com/xandergos/terrain-diffusion-mc/releases) page and place it in your Minecraft `mods/` folder. Make sure the Minecraft version matches.
+2. Launch Minecraft and create a **Terrain Diffusion** world.
 
-The Fabric mod is available in the [releases](https://github.com/xandergos/terrain-diffusion-mc/releases) section. Make sure the Minecraft version's match up. Place it in your Minecraft mods folder.
+## Creating a World
 
-2. Install the Terrain Diffusion backend
+When creating a world, select the **Terrain Diffusion** world type. Click **Customize** to set the `World Scale` (see [Per-world settings](#per-world-settings) below).
 
-You need [Python](https://www.python.org/downloads/) and [git](https://git-scm.com/) installed. Then run:
+## Exploring the World
 
-```
-git clone https://github.com/xandergos/terrain-diffusion
-cd terrain-diffusion
-pip install -r requirements.txt
-```
+The mod includes a built-in terrain explorer web UI. Run the `/td-explore` command in-game; it will print a clickable link (e.g. `http://localhost:19801`) that opens an interactive map in your browser. Click the map on the left to open a "detailed view". Click the detailed view to get coordinates in the bottom left. You can also filter for certain climates.
 
-3. For the best performance, install PyTorch with CUDA if you have an NVIDIA GPU.
-
-```
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-```
-
-4. See "Generating a World for Minecraft" below. After that you are good to go.
-
-## Using Terrain Diffusion
-
-Terrain Diffusion has two main tools:
-
-1. **mc-api** generates the actual world for Minecraft.
-
-2. **explorer** is a separate viewer for exploring worlds.
-
-## Generating a World for Minecraft
-
-Ensure that terrain-diffusion is up to date with `git pull`.
-
-Run the API:
-```
-python -m terrain_diffusion mc-api xandergos/terrain-diffusion-30m --seed <YOUR_SEED>
-```
-
-30m is recommended for gameplay (practically and visually). If you want to replicate the paper:
-```
-python -m terrain_diffusion mc-api xandergos/terrain-diffusion-90m --seed <YOUR_SEED>
-```
-
-Note that because of the new resolution you will need to update the mod config.
-
-## Previewing the World
-
-Use explorer to scout continents, mountains, islands, and interesting terrain before entering Minecraft. The input arguments should be exactly the same used for `mc-api`.
-
-Example:
-```
-python -m terrain_diffusion explore xandergos/terrain-diffusion-30m --seed <YOUR_SEED>
-```
-
-Explorer opens a GUI with two panels. The left panel shows a global view. Click anywhere to zoom in. The console prints the coordinates you clicked at various resolutions.
-Note that Minecraft uses a flipped coordinate system, so you will need to flip the coordinates in the console.
+Use the explorer to scout continents, mountains, islands, and other interesting terrain before venturing out in Minecraft.
 
 ## Configuration
 
-There are some configuration options you can play with, if you want:
+Edit `config/terrain-diffusion-mc.properties` (created automatically on first launch):
 
-```
 # Terrain Diffusion MC configuration
 
-# This is the native resolution for height conversion (Resolution before `scale` is applied)
-# If you are using a 30m resolution model, this should be 30 for real life slopes.
-# You can adjust the value down to increase terrain height or up to decrease it.
-height_converter.resolution=30
+# Inference device: "cpu", "gpu", or "auto" (try GPU first then fall back to CPU).
+# Defaults to "gpu" so startup fails loudly if CUDA is expected but not detected.
+# Set to "cpu" explicitly if you do not have a CUDA-capable GPU.
+inference.device=gpu
 
-# Scale factor for terrain upsampling. 1 = 1 block per API pixel, 2 = 2 blocks per API pixel, 4 = 4 blocks per API pixel, etc.
-# Example: If you are using a 30m resolution API, then 1 = 30m resolution, 2 = 15m resolution, 4 = 7.5m resolution, etc.
-heightmap_api.scale=2
+# Offload inactive models from VRAM between pipeline stages.
+# Keeps peak VRAM to ~1.5-2 GB. Set to false if you have ~2.5+ GB free for slightly
+# faster generation.
+inference.offload_models=true
 
-# Noise scale factor for terrain at large slopes (default: 1.0)
-# mainly affects how "rough" cliffs or steep slopes are
-heightmap_api.noise=1.0
-
-# Base URL of the heightmap API server.
-heightmap_api.url=http://localhost:8000
-
-# ADVANCED
-# Gamma and c of terrain (Mod applies elev -> ((elev + c)^gamma - c^gamma) before scaling down by `height_converter.resolution`)
-# I tried experimenting with this to boost low-elevation relief, but didn't really see any improvements. Maybe I missed something. Note that this changes the scale of the elevation, so `height_converter.resolution`
-# will need to be changed accordingly (usually to a much smaller value).
-height_converter.gamma=1.0
-height_converter.c=30.0
+# Port for the local terrain explorer web UI (/td-explore).
+explorer.port=19801
 ```
+
+### Per-world settings
+
+For Terrain Diffusion worlds, click **Customize** in world creation and set:
+
+- `World Scale` (integer `1..6`)
+
+This value is saved with the world save and affects:
+
+- block-to-meter mapping (`scale=1` => `30m/block`, `scale=2` => `15m/block`, etc.)
+- world max height for newly created worlds (assumes tallest point is 10000 real-world meters)
+- pre-registered worldgen variants for scales `1..6`
+- 2 is recommended to start, or 1 for smaller worlds
+
+## Building from Source
+
+1. Clone this repository.
+2. Download the ONNX model files from [HuggingFace](https://huggingface.co/xandergos/terrain-diffusion-30m-onnx). Only the `.onnx` files are needed (`coarse_model.onnx`, `base_model.onnx`, `decoder_model.onnx`). Place them in `src/main/resources/onnx/`.
+3. Build with Gradle:
+
+```
+./gradlew build
+```
+
+The build step runs an ONNX optimization pass before packaging the models into the jar. The released jar bundles `onnxruntime_gpu` (CUDA). ONNX Runtime also supports other execution providers (DirectML, TensorRT, ROCm, etc.). See the [ORT provider documentation](https://onnxruntime.ai/docs/execution-providers/) if you want to build with a different backend.

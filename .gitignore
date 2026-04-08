@@ -120,3 +120,6 @@ runs/
 
 bin/
 .history/
+*.onnx
+.cursor/
+.vscode/

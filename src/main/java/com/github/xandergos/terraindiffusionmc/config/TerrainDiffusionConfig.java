@@ -14,12 +14,9 @@ public final class TerrainDiffusionConfig {
     private static final String FILE_NAME = "terrain-diffusion-mc.properties";
     private static final String RESOURCE_PATH = "/" + FILE_NAME;
     private static final Properties PROPERTIES = new Properties();
-    private static final float DEFAULT_RESOLUTION = 30f;
-    private static final float DEFAULT_GAMMA = 1.0f;
-    private static final float DEFAULT_C = 30.0f;
-    private static final int DEFAULT_SCALE = 2;
-    private static final float DEFAULT_NOISE = 1.0f;
-    private static final String DEFAULT_API_URL = "http://localhost:8000";
+    private static final String DEFAULT_INFERENCE_DEVICE = "gpu";
+    private static final boolean DEFAULT_OFFLOAD_MODELS = true;
+    private static final int DEFAULT_EXPLORER_PORT = 19801;
 
     static {
         loadDefaults();
@@ -32,28 +29,19 @@ public final class TerrainDiffusionConfig {
     private TerrainDiffusionConfig() {
     }
 
-    public static float heightConverterResolution() {
-        return readFloat("height_converter.resolution", DEFAULT_RESOLUTION) / scale();
+    /** Inference device: "cpu", "gpu", or "auto" (try GPU then fall back to CPU). */
+    public static String inferenceDevice() {
+        return readString("inference.device", DEFAULT_INFERENCE_DEVICE);
     }
 
-    public static float heightConverterGamma() {
-        return readFloat("height_converter.gamma", DEFAULT_GAMMA);
+    /** Whether to offload inactive models from VRAM between pipeline stages. */
+    public static boolean offloadModels() {
+        return readBoolean("inference.offload_models", DEFAULT_OFFLOAD_MODELS);
     }
 
-    public static float heightConverterC() {
-        return readFloat("height_converter.c", DEFAULT_C);
-    }
-
-    public static int scale() {
-        return readInt("heightmap_api.scale", DEFAULT_SCALE);
-    }
-
-    public static float noise() {
-        return readFloat("heightmap_api.noise", DEFAULT_NOISE);
-    }
-
-    public static String apiUrl() {
-        return PROPERTIES.getProperty("heightmap_api.url", DEFAULT_API_URL);
+    /** TCP port for the local terrain explorer HTTP server. */
+    public static int explorerPort() {
+        return readInt("explorer.port", DEFAULT_EXPLORER_PORT);
     }
 
     private static void loadDefaults() {
@@ -68,12 +56,13 @@ public final class TerrainDiffusionConfig {
         }
 
         if (!loadedFromResource) {
-            PROPERTIES.setProperty("height_converter.resolution", String.valueOf(DEFAULT_RESOLUTION));
-            PROPERTIES.setProperty("heightmap_api.scale", String.valueOf(DEFAULT_SCALE));
-            PROPERTIES.setProperty("heightmap_api.url", DEFAULT_API_URL);
-            PROPERTIES.setProperty("height_converter.gamma", String.valueOf(DEFAULT_GAMMA));
-            PROPERTIES.setProperty("height_converter.c", String.valueOf(DEFAULT_C));
+            PROPERTIES.setProperty("inference.device", DEFAULT_INFERENCE_DEVICE);
         }
+    }
+
+    private static String readString(String key, String defaultValue) {
+        String value = PROPERTIES.getProperty(key);
+        return value != null ? value.trim().toLowerCase() : defaultValue;
     }
 
     private static Path resolveConfigPath() {
@@ -111,24 +100,14 @@ public final class TerrainDiffusionConfig {
         }
     }
 
-    private static float readFloat(String key, float defaultValue) {
+    private static boolean readBoolean(String key, boolean defaultValue) {
         String value = PROPERTIES.getProperty(key);
-        if (value == null) {
-            return defaultValue;
-        }
-        try {
-            return Float.parseFloat(value);
-        } catch (NumberFormatException e) {
-            System.err.println("Invalid float for " + key + ": " + value + ", using default " + defaultValue);
-            return defaultValue;
-        }
+        return value != null ? Boolean.parseBoolean(value.trim()) : defaultValue;
     }
 
     private static int readInt(String key, int defaultValue) {
         String value = PROPERTIES.getProperty(key);
-        if (value == null) {
-            return defaultValue;
-        }
+        if (value == null) return defaultValue;
         try {
             return Integer.parseInt(value);
         } catch (NumberFormatException e) {
@@ -136,5 +115,5 @@ public final class TerrainDiffusionConfig {
             return defaultValue;
         }
     }
-}
 
+}

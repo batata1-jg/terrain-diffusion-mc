@@ -1,7 +1,7 @@
 package com.github.xandergos.terraindiffusionmc.world;
 
-import com.github.xandergos.terraindiffusionmc.api.HeightmapApiClient;
-import com.github.xandergos.terraindiffusionmc.api.HeightmapApiClient.HeightmapData;
+import com.github.xandergos.terraindiffusionmc.pipeline.LocalTerrainProvider;
+import com.github.xandergos.terraindiffusionmc.pipeline.LocalTerrainProvider.HeightmapData;
 import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
@@ -23,7 +23,6 @@ import net.minecraft.world.biome.source.BiomeSource;
 import net.minecraft.world.biome.source.util.MultiNoiseUtil;
 
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
@@ -39,19 +38,14 @@ public class TerrainDiffusionBiomeSource extends BiomeSource {
 
     public static final MapCodec<TerrainDiffusionBiomeSource> CODEC = RecordCodecBuilder.mapCodec((instance) ->
             instance.group(
-                    Codec.STRING.fieldOf("api_url").orElse("http://localhost:8000").forGetter((TerrainDiffusionBiomeSource source) -> source.apiUrl),
                     RegistryOps.getEntryLookupCodec(RegistryKeys.BIOME)
             ).apply(instance, instance.stable(TerrainDiffusionBiomeSource::new)));
 
 
     private RegistryEntryLookup<Biome> biomeLookup;
     private Map<Short, RegistryEntry<Biome>> biomeIdMap = null;
-    private final String apiUrl;
-    private final HeightmapApiClient apiClient;
 
-    public TerrainDiffusionBiomeSource(String apiUrl, RegistryEntryLookup<Biome> biomeLookup) {
-        this.apiUrl = apiUrl;
-        this.apiClient = new HeightmapApiClient(apiUrl);
+    public TerrainDiffusionBiomeSource(RegistryEntryLookup<Biome> biomeLookup) {
         this.biomeLookup = biomeLookup;
     }
 
@@ -113,24 +107,12 @@ public class TerrainDiffusionBiomeSource extends BiomeSource {
         int blockEndX = blockStartX + TILE_SIZE;
         int blockEndZ = blockStartZ + TILE_SIZE;
 
-        try {
-            HeightmapData data = apiClient.fetchHeightmap(blockStartZ, blockStartX, blockEndZ, blockEndX).get();
-            if (data != null && data.biomeIds != null) {
-                int localX = blockX - blockStartX;
-                int localZ = blockZ - blockStartZ;
-
-                // Clamp to safe ranges
-                if (localX < 0) localX = 0;
-                if (localZ < 0) localZ = 0;
-                if (localX >= data.width) localX = data.width - 1;
-                if (localZ >= data.height) localZ = data.height - 1;
-
-                short biomeId = data.biomeIds[localZ][localX];
-                return biomeIdMap.get((short) biomeId);
-            }
-        } catch (InterruptedException | ExecutionException e) {
-            // Log error or handle gracefully?
-            // For now, return default
+        HeightmapData data = LocalTerrainProvider.getInstance().fetchHeightmap(blockStartZ, blockStartX, blockEndZ, blockEndX);
+        if (data != null && data.biomeIds != null) {
+            int localX = Math.max(0, Math.min(data.width  - 1, blockX - blockStartX));
+            int localZ = Math.max(0, Math.min(data.height - 1, blockZ - blockStartZ));
+            RegistryEntry<Biome> entry = biomeIdMap.get(data.biomeIds[localZ][localX]);
+            if (entry != null) return entry;
         }
 
         return defaultEntry;
