@@ -1,6 +1,6 @@
 # Terrain Diffusion Fabric Mod
 
-**Now [availabe on Modrinth](https://modrinth.com/mod/terrain-diffusion)**
+**Now [available on Modrinth](https://modrinth.com/mod/terrain-diffusion)**
 
 This is a Minecraft Fabric mod integrating [Terrain Diffusion](https://github.com/xandergos/terrain-diffusion).
 
